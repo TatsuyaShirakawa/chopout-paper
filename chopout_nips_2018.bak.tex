@@ -1,0 +1,320 @@
+\documentclass{article}
+
+    % if you need to pass options to natbib, use, e.g.:
+    % \PassOptionsToPackage{numbers, compress}{natbib}
+    % before loading nips_2018
+        
+    % ready for submission
+    % \usepackage{nips_2018}
+
+    % to compile a preprint version, e.g., for submission to arXiv, add
+    % add the [preprint] option:
+    \usepackage[preprint]{nips_2018}
+    
+    % to compile a camera-ready version, add the [final] option, e.g.:
+    % \usepackage[final]{nips_2018}
+    
+    % to avoid loading the natbib package, add option nonatbib:
+    % \usepackage[nonatbib]{nips_2018}
+
+    \usepackage[utf8]{inputenc} % allow utf-8 input
+    \usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+    \usepackage{hyperref}       % hyperlinks
+    \usepackage{url}            % simple URL typesetting
+    \usepackage{booktabs}       % professional-quality tables
+    \usepackage{amsfonts}       % blackboard math symbols
+    \usepackage{nicefrac}       % compact symbols for 1/2, etc.
+    \usepackage{microtype}      % microtypography
+    \usepackage{amsmath}
+    \usepackage{amsthm}
+
+    \newtheorem{theorem}{Theorem}   
+    \newtheorem{lemma}{Lemma} 
+
+    \newcommand{\maximize}{\mathop{\rm maximize}\limits}
+    \newcommand{\minimize}{\mathop{\rm minimize}\limits}
+    \newcommand{\argmax}{\mathop{\rm arg~max}\limits}
+    \newcommand{\argmin}{\mathop{\rm arg~min}\limits}
+
+    
+    \title{Chopout: A Simple Way to Train Variable Sized Neural Networks at Once}
+ 
+    % The \author macro works with any number of authors. There are two
+    % commands used to separate the names and addresses of multiple
+    % authors: \And and \AND.
+    %
+    % Using \And between authors leaves it to LaTeX to determine where to
+    % break the lines. Using \AND forces a line break at that point. So,
+    % if LaTeX puts 3 of 4 authors names on the first line, and the last
+    % on the second line, try using \AND instead of \And before the third
+    % author name.
+    
+    \author{
+      Tatsuya Shirakawa \\
+      ABEJA, Inc. \\
+      \texttt{tatsuya@abejainc.com}
+      \And
+      Takanori Ogata \\
+      ABEJA, Inc. \\
+      \texttt{takanori@abejainc.com}
+      %% examples of more authors
+      %% \And
+      %% Coauthor \\
+      %% Affiliation \\
+      %% Address \\
+      %% \texttt{email} \\
+      %% \AND
+      %% Coauthor \\
+      %% Affiliation \\
+      %% Address \\
+      %% \texttt{email} \\
+      %% \And
+      %% Coauthor \\
+      %% Affiliation \\
+      %% Address \\
+      %% \texttt{email} \\
+      %% \And
+      %% Coauthor \\
+      %% Affiliation \\
+      %% Address \\
+      %% \texttt{email} \\
+    }
+    
+    \begin{document}
+    % \nipsfinalcopy is no longer used
+    
+    \maketitle
+    
+    \begin{abstract}
+      Large deep neural networks require huge memory to run and their running speed is sometimes too slow for real applications. Therefore network size reduction with keeping accuracy is crucial for practical applications. We present a novel neural network operator, \textit{chopout}, with which neural networks are trained, even in a single training process, so as to truncated sub-networks perform as well as possible. \textit{Chopout} is easy to implement and integrate into most type of existing neural networks. Furthermore it enables to reduce network size even after training just by truncating layers. We prove some theoretical aspects of \textit{chopout} and show its effectiveness through several experiments.
+    \end{abstract}
+    
+    \section{Introduction}
+    
+    % - deep leraningはデータ・ドリブンなデータサイエンスにとって必要不可欠な道具になった。
+    % - 大きさやあアーキテクチャの異なる多種類のモデルが提案されている。
+    % - 精度を出すために大きいNNがたくさん提案されている
+    %    - ILSVRCの優勝モデル達
+    %    - ResNet 1000
+    %    - over parametrize
+    % - over parametrizedなモデルの方が汎化性能がたかい
+    % - 一方で、小さいモデルの方が実行効率がよい。
+    %    - SqueezeNet, shuffle net, mobilenet v1/v2
+    % - 実行環境によっては大きなメモリを物理的に載せられない
+    % - コスト的にも小さいモデルの方がよい
+    % - リアルタイムアプリケーションの場合、リアル以上の速度が必要（精度を犠牲にして）
+    % - とくにアプリケーションとして動作させるときはコストの面でCPUで動作させることが多く、ネットワークのインファレンスコストはパラメータ数にほぼ比例する。
+    % - そのため、精度を落とさずにネットワークのサイズを小さくすることはプラクティカルには非常に重要
+    
+    Deep neural networks are crucial building blocks for current artificial intelligence (AI)  because of their outstanding performance in accuracy and ease of use.
+    Today, various sizes and types of deep neural network architectures are proposed and are applied to real applications as a de-fact standard tool to learn the implicit input-output functionality of data.
+    In the annual ImageNet Large Scale Visual Recognition Challenge (ILSVRC), winning models are becoming more and more larger every year. 
+    Moreover, some researches show that generalization error can be reduced using over-parametrized neural networks.
+
+    However these line of works does not align in the real application, where running performance in time and GPU/CPU memory consumption is not negligible. For example, in case of real-time application, inference need to be sufficiently fast. 
+
+    Therefore smaller neural networks are preferable for real application. For this end, various type of model compression techniques are actively developed, which enables reducing model parameters, for example, by pruning redundant parameters. However most of such techniques are not easy to implement on modern deep learning frameworks such as TensorFlow, Pytorch and MxNet because they often requires low level implementation which is not directly supported on such frameworks.
+
+    In this research, we proposed a novel dropout-like easy-to-use operator, \textit{chopout}, with which deep neural networks are trained so that their truncated sub-networks also perform well. 
+
+        
+    Our main contribution in this research is as follows.
+    \begin{itemize} 
+      \item We provide a novel operator \textit{chopout} which performs dynamic network reduction in training and it is quite easy to implement and use.      
+      \item Training networks with \textit{chopout} enhance the accuracy of their truncated sub-networks as well as possible,
+      \item We prove that training linear autoencoders with \textit{chopout} is equivalent to computing principal component analysis and
+      principal components are computed simultaneously, 
+      \item We show experimentally that trained networks with chopout is competitive in model size and accuracy for current state-of-the-art network-reducing methods.
+    \end{itemize}
+
+    The rest of this paper is organized as follows: 
+    in section \ref{related_works} we relate our work with previous researches;
+    in section \ref{method} we present the \textit{chopout} and provide some theoretical aspect of it; 
+    in section \ref{experiments} we provide some experiments; 
+    lastly in Section \ref{conclusion} we conclude our paper. 
+
+    \subsection{Preliminary Notations}
+    \label{preliminary_notations}
+    
+    Let $\mathbf{x} \in \mathbb{R}^{d}$ and $\mathbf{y} \in \mathbb{R}^{d'}$ be data distributed as $(\mathbf{x}, \mathbf{y}) \sim P(\mathbf{x}, \mathbf{y})$. 
+    We consider the problem of finding a neural network $\hat{\mathbf{y}} = f(\mathbf{x})$ which best approximate the implicit functionality from $\mathbf{x}$ to $\mathbf{y}$ through given dataset $\{(\mathbf{x}_i, \mathbf{y}_i) \}_{i=1}^N$ i.i.d. distributed from $P(\mathbf{x}, \mathbf{y})$. More formally, we formulate the neural network $\hat{\mathbf{y}} = f(\mathbf{x})$ as 
+    \begin{align}
+      \mathbf{h}_1 &= {\sigma}_1 (\mathbf{W}_1 \mathbf{x} + \mathbf{b}_1), \nonumber \\
+      \mathbf{h}_{l+1} &= {\sigma}_{l+1} (\mathbf{W}_{l+1} \mathbf{h}_{l} + \mathbf{b}_{l+1}) \ \ \ (l=2,3, \dots, L-2), \nonumber \\
+      \hat{\mathbf{y}} &= f(\mathbf{x}) = {\sigma}_{L} (\mathbf{W}_{L} \mathbf{h}_{L-1} + \mathbf{b}_{L}),\nonumber      
+    \end{align}
+    where $\mathbf{h}_l \in \mathbf{R}^{d_l}$ is the intermediate feature vectors of layer $l$, $\mathbf{W}_l, \mathbf{b}_l$ are weight matrix and bias vector of layer $l$ and $\sigma_l(\cdot)$ is non-linear activation function of layer $l$. We set $\mathbf{h}_0 = \mathbf{x}$, $\mathbf{h}_{L} = \mathbf{y}$, $d_0=d$ and $d_L=d'$ for simplicity. In this case we can simply write
+    \begin{align}
+      \mathbf{h}_{l+1} &= {\sigma}_l (\mathbf{W}_{l+1} \mathbf{h}_l + \mathbf{b}_{l+1}) \ \ \ (l=0,1, \dots, L-1). \label{eq:nn}
+    \end{align}
+
+    The approximation is performed by minimizing empirical loss
+
+    \begin{equation}
+      \minimize_{\mathbf{\theta}} \frac{1}{N} \sum_{i=1}^N loss (\mathbf{y}_i, \hat{\mathbf{y}}_i), \label{original_objective}
+    \end{equation}
+
+    where $\mathbf{\theta}=\{(\mathbf{W}_l, \mathbf{b}_l)\}_{l=1}^L$ is the set of whole trainable parameters of the neural network.
+
+    \section{Related works}
+    \label{related_works}
+    % - squeeze net, shuffle net, mobile net v1/v2
+    % - sparsification (L1, variational dropout)
+    % - parameter pruning
+    % - regularization
+    % - low-rank approximation
+    % - distillation
+    Many approaches are proposed to reduce the neural network size. 
+    
+    \citet{iandola2016squeezenet} proposed SqueezeNets which utilized the fire module to reduce network parameters with keeping its accuracy. Successive research are done in this line and \citet{howard2017mobilenet} proposed MobileNets and \citet{zhang2017shufflenet} proposed ShuffleNets. The drawback of these works is that the network is fixed through training and therefore networks cannot be reduced after training.
+
+    Other line of works focus on pruning neural network parameters. \citet{han2015learning} 
+    
+    \section{Method}
+    \label{method}
+
+    \subsection{Chopout}
+    Our proposed operator \textit{chopout} is a \textit{dropout}-like stochastic operator. 
+    When it applied to a vector $\mathbf{h} = (h_1, h_2, \dots, h_c) \in \mathbb{R}^c$ to get $chopout(\mathbf{h})$, in training phase, $\mathbf{h}$ is randomly truncated. 
+    More precisely, at the every iteration of training phase, truncation length $m$ is uniformly randomly drawn from ${1, 2, \dots, c}$ \footnote{We can consider more complex distributions instead of simple uniform distribution $Unif(\{1,2, \dots, c\})$ but we leave it to further work.} and according to the drawn $m$, $\mathbf{h}$ is truncated by zeroing out latter $c-m$ dimensions;    
+    \begin{align}
+        m &\sim Unif(\{1, 2, \dots, c\}) \nonumber \\
+        h &= chop(\mathbf{h}, m) := (h_1, h_2, \dots, h_m, 0, \dots, 0) \in \mathbb{R}^c,
+    \end{align}    
+    where $chop(\mathbf{h}, m)$ indicates the function which zeros out latter $c-m$ dimensions of $\mathbf{h}$.
+    In test phase, \textit{chopout} simply pass through the input vector $\mathbf{h}$.
+
+    We add \textit{chopout} to every before matrix multiplication is computed
+    \begin{align}
+      m &\sim Unif(\{1, 2, \dots, d_l\}), \nonumber \\
+      \mathbf{h}_{l+1} &= {\sigma}_l (\mathbf{W}_{l+1} chop(\mathbf{h}_l, m) + \mathbf{b}_{l+1}) \ \ (l=0, 1, \dots, L-1). \label{eq:nn_with_chopout}
+    \end{align}
+    
+    In this case, the original minimization \ref{original_objective} become to be
+    \begin{equation}
+      \minimize_{\mathbf{\theta}} \frac{1}{N} 
+      \mathbb{\sum}_{i=1}^N
+       \mathbb{E}_{m_1, m_2, \dots, m_L}       
+       \left[
+       loss \left(\mathbf{y}_i, f\left(\mathbf{x}_i; \mathbf{\theta}, m_1, m_2, \dots, m_L\right)\right) 
+       \right], 
+       \label{objective_with_chopout}
+    \end{equation}
+    where $f(\mathbf{x}_i; \mathbf{\theta}, m_1, m_2, \dots, m_L)$ is the neural network defined as \ref{eq:nn_with_chopout} given and the expectation is taken over $m_i \sim Unif(\{1, 2, \dots, d_i\})$ for all $i=1,2,\dots,L$. The neural network $f\left(\mathbf{x}_i; \mathbf{\theta}, m_1, m_2, \dots, m_L\right)$ can be seen as \textit{a former sub-network} of $f(x;
+    \mathbf{\theta}) := f(\mathbf{x}_i; \mathbf{\theta}, d_1, d_2, \dots, d_L)$, of which parameters in $i$-th layer are former $d_i$ dimensions of $i$-th layer of $f(\mathbf{x};\mathbf{\theta})$. Therefore training the neural network with \textit{chopout} \ref{eq:nn_with_chopout} through data $(\mathbf{x}, \mathbf{y})$ can be interpreted as repeating following two steps;
+    \begin{enumerate}
+      \item sampling sub-network whose layers are former parts of original network of correspondence depth,
+      \item training the drawn sub-network through $(\mathbf{x}, \mathbf{y})$.
+    \end{enumerate}
+
+    This interpretation lead to the intuition that, by training with chopout, the original neural network \ref{eq:nn} becomes to robust, even after training, against truncation of each layer with keeping its accuracy as much as possible because, during training, each former sub-network are drawn and trained so as to minimize the loss value.
+
+    We can extend \textit{chopout} to convolutional operators by randomly truncating channels of convolutional operators. 
+    
+    \subsection{Simultaneous computation of PCA with chopout}
+    
+    We investigate an application of chopout in a quite simple case where the neural network is linear autoencoder with one-layer encoder and decoder
+    \begin{align}
+      &\hat{\mathbf{x}} = f(\mathbf{x}) =  dec(chopout(enc(\mathbf{x}))), \nonumber \\
+      &\mathbf{h} = enc(\mathbf{x}) = \mathbf{U} \mathbf{x} + \mathbf{b}, \nonumber \\      
+      &\mathbf{h}^\prime = chopout(\mathbf{h}), \label{eq:pca_with_chopout}\\
+      &dec(\mathbf{h}^\prime) = \mathbf{V} \mathbf{h}^\prime + \mathbf{c}. \nonumber 
+    \end{align}
+    where $\mathbf{x}, \mathbf{b}, \mathbf{c}, \mathbf{h}, \mathbf{h}^\prime, \hat{\mathbf{x}} \in \mathbb{R}^d$ and  $\mathbf{U}, \mathbf{V} \in \mathbb{R}^{d \times d}$. 
+    For technical reasons, only in this subsection, we assume that \textit{chopout} draws $m$ according to $Unif(\{0, 1, \dots, d\})$ instead of $Unif(\{1, 2, \dots, d\})$ 
+    \footnote{this change is trivial but necessary for proving the theorem \ref{th:pca}}.
+    Note that the reconstruction function $f(\mathbf{x})$ is a stochastic function because chopout is introduced. $\hat{\mathbf{x}}$ is also a stochastic variable as well.
+
+    We let the loss function to be the mean squared error between given original input $\mathbf{x}$ and reconstructed input $\hat{\mathbf{x}}$ so that, given dataset $X = \{\mathbf{x}_i\}_{i=1}^N$, we have minimization problem of
+    \begin{align}
+      \minimize_{\mathbf{\theta} = \left\{ \mathbf{U}, \mathbf{V}, \mathbf{b}, \mathbf{c}\right\}} &\frac{1}{N} \sum_{i=1}^N \mathbb{E}_{m \sim r} \frac{1}{2} \Vert \mathbf{x}_i - \left( \mathbf{V} chop(\mathbf{U} \mathbf{x} + \mathbf{b}, m) + \mathbf{c} \right) \Vert^2 \label{eq:linae}
+    \end{align}
+    where $r = Unif(\{0,1,\dots,d\})$ is a uniform distribution over $\{0, 1, \dots, d\}$.
+    If we \textbf{do not} introduce \textit{chopout} in equation \ref{eq:pca_with_chopout}, the minimization \ref{eq:linae} is apparently of useless because the optimal $f(x)$ is identity. However, with \textit{chopout}, we can prove that minimizing \ref{eq:linae} is equivalent to computing the Principal Component Analysis (PCA). Interestingly this computation is done simultaneously over all principal components at once.
+
+    \begin{theorem}
+      \label{th:pca}
+      Assume dataset $\mathbf{X} = \{\mathbf{x}_i \}_{i=1}^N$
+      is not contained in any lower-dimensional sub-space.
+      Then the minimization problem \ref{eq:linae} is equivalent to solving PCA, that is, if $\mathbf{\theta}^\ast = \{\mathbf{U}^\ast, \mathbf{V}^\ast, \mathbf{b}^\ast, \mathbf{c}^\ast\}$ is the minimizer of \ref{eq:linae} then we have 
+      \begin{enumerate}
+        \item $\mathbf{b}^\ast = -\mathbf{U}^\ast \mathbf{\mu}$ where $\mathbf{\mu} := \sum_{i=1}^N \mathbf{x}_i$ / N,
+        \item $\mathbf{c}^\ast = \mathbf{\mu}$,
+        \item $m$-th row vector of $\mathbf{U}$ and $m$-th column vector of $\mathbf{V}^\ast$ are both parallel to $m$-th principal component of $X$.
+      \end{enumerate}
+    \end{theorem}
+    \begin{proof}
+      Let $\mathbf{I}_m = diag(1, 1, \dots, 1, 0, \dots, 0)$ to be a diagonal matrix of which first $m$ diagonal values are 1 and rest are 0. Further let $q = Unif(\{\mathbf{x}_1, \mathbf{x}_2, \dots, \mathbf{x}_N\})$ to be a uniform distribution over dataset $X$ and define $\bar{\mathbf{x}} := \mathbf{x} - \mu$ and $\bar{q} = Unif(\{ \bar{\mathbf{x}_1}, \bar{\mathbf{x}_2}, \dots, \bar{\mathbf{x}_N} \})$. Then we have
+      \begin{align}      
+        \min_\mathbf{\theta} & \mathbb{E}_{\mathbf{x} \sim q} \mathbb{E}_{m \sim r} \left[ \frac{1}{2} \Vert \mathbf{x} - (\mathbf{V} chop(\mathbf{U}\mathbf{x} + \mathbf{b}, m) + \mathbf{c})  \Vert ^2 \right] \nonumber \\
+        &= \min_\mathbf{\theta} \mathbb{E}_{\mathbf{x} \sim q} \mathbb{E}_{m \sim r} \left[ \frac{1}{2} \Vert \mathbf{x} - \left(\mathbf{V} \mathbf{I}_m (\mathbf{U} \mathbf{x} + \mathbf{b}) + \mathbf{c} \right)  \Vert ^2 \right] \nonumber \\
+        &= \min_\mathbf{\theta} \mathbb{E}_{m \sim r} \mathbb{E}_{\mathbf{x} \sim q} \left[ \frac{1}{2} \Vert \mathbf{x} - \left(\mathbf{V} \mathbf{I}_m (\mathbf{U} \mathbf{x} + \mathbf{b}) + \mathbf{c} \right)  \Vert ^2 \right] \nonumber \\
+        &= \min_\mathbf{\theta} \mathbb{E}_{m \sim r} \mathbb{E}_{\bar{\mathbf{x}} \sim \bar{q}} \left[ \frac{1}{2} \Vert (\bar{\mathbf{x}} + \mathbf{\mu}) - \left(\mathbf{V} \mathbf{I}_m (\mathbf{U} (\bar{\mathbf{x}} + \mathbf{\mu}) + \mathbf{b}) + \mathbf{c} \right)  \Vert ^2 \right] \nonumber \\       
+        &= \min_\mathbf{\theta} \mathbb{E}_{m \sim r} \mathbb{E}_{\bar{\mathbf{x}} \sim \bar{q}} \left[ \frac{1}{2} \Vert \bar{\mathbf{x}} - \mathbf{V} \mathbf{I}_m \mathbf{U} \bar{\mathbf{x}} \Vert^2 
+        + \frac{1}{2} \Vert \mathbf{V} \mathbf{I}_m (\mathbf{U} \mathbf{\mu} + \mathbf{b}) + \mathbf{c} - \mathbf{\mu} \Vert ^2 \right] \label{eq:proof_1}        
+      \end{align}
+      The equation \ref{eq:proof_1} follows from the fact $\mathbf{E}_{\bar{\mathbf{x}} \sim \bar{q}}[\bar{\mathbf{x}}] = 0$. 
+      
+      Noting that we can zero out the second term of \ref{eq:proof_1} by letting $\mathbf{b} = -\mathbf{U} \mathbf{\mu}$ and $\mathbf{c} = \mathbf{\mu}$, we have
+      \begin{equation}
+        \mathbf{V^\ast} \mathbf{I}_m (\mathbf{U^\ast} \mathbf{\mu} + \mathbf{b^\ast}) + \mathbf{c^\ast} - \mathbf{\mu}  = 0 \ \ (m=0, 1, \dots,d). \label{eq:proof_2}
+      \end{equation}      
+      Therefore equation \ref{eq:proof_1} is equal to
+      \begin{equation}
+      \min_{\mathbf{U}, \mathbf{V}} \mathbb{E}_{m \sim r} \mathbb{E}_{\bar{\mathbf{x}} \sim \bar{q}} \left[ \frac{1}{2} \Vert \bar{\mathbf{x}} - \mathbf{V} \mathbf{I}_m \mathbf{U} \bar{\mathbf{x}} \Vert^2 \right]  \label{eq:proof_3}
+      \end{equation}
+
+      and the property 3 in theorem follows from the bellow lemma \ref{lm:pca}. 
+      
+      Lastly we show property 1 and 2 in theorem. By letting $m=0$ we have $\mathbf{c}^\ast = \mathbf{\mu}$ and 
+      \begin{equation}
+        \mathbf{V}^\ast \mathbf{I}_m (\mathbf{U^\ast} \mathbf{\mu} + \mathbf{b^\ast}) = 0 \ \ (m=0, 1, \dots, d).
+      \end{equation}
+      By letting $m=d$ and multiplying $(\mathbf{V}^\ast)^{-1}$ from the left hand of the \ref{eq:proof_2} we have $\mathbf{b}^\ast = - \mathbf{U}^\ast \mathbf{\mu}$.
+    \end{proof}
+
+    \begin{lemma}
+      \label{lm:pca}
+      Let $\mathbf{U}^\ast$ and $\mathbf{V}^\ast$ be the minimizer of equation \ref{eq:proof_3} then 
+      \begin{enumerate}
+        \item $m$-th row vector of $\mathbf{U}$ and $m$-th column vector of $\mathbf{V}^\ast$ are both parallel to $m$-th principal component of $X$ and
+        \item $\mathbf{U}^\ast$ and $\mathbf{V}^\ast$ are invertible.
+      \end{enumerate}
+    \end{lemma}
+    \begin{proof}
+      We have
+      \begin{equation}
+        \min_{\mathbf{U}, \mathbf{V}} \mathbb{E}_{m \sim r} \mathbb{E}_{\bar{\mathbf{x}} \sim \bar{q}} \left[ \frac{1}{2} \Vert \bar{\mathbf{x}} - \mathbf{V} \mathbf{I}_m \mathbf{U} \bar{\mathbf{x}} \Vert^2 \right]  
+        \geq \mathbb{E}_{m \sim r} \left[ \min_{\mathbf{U}, \mathbf{V}} \mathbb{E}_{\bar{\mathbf{x}} \sim \bar{q}} \left[ \frac{1}{2} \Vert \bar{\mathbf{x}} - \mathbf{V} \mathbf{I}_m \mathbf{U} \bar{\mathbf{x}} \Vert^2 \right] \right]
+        \label{eq:proof_4}
+      \end{equation}
+      and equality can be achieved when we compute $\mathbf{V}, \mathbf{U}$ by the Power Iteration Method. Therefore the optima of left hand side is also that of right hand side. However the optima of right hand side is achieved only when
+      
+      If the property 1 of lemma is satisfied then the property 2 is apparently follows because we assumed that $\mathbf{X}=\{x_i\}_{i=1}^N$ is not contained in any lower-dimensional sub-space. 
+
+      
+    \end{proof}    
+
+    \section{Experiments}
+    \label{experiments}
+
+
+    \section{Conclusion}
+    \label{conclusion}
+    We introduced a novel and easy-to-use operator \textit{chopout} and showed that, with \textit{chopout}, neural networks become to be accurate even if their intermediate layers are highly truncated. 
+    We believe that dynamic size reduction technique as chopout can be further applied to other settings. For example, (1) depth of neural networks can be dynamically reduced by dynamically skipping the deeper layers (e.g. successive residual blocks in ResNet) and (2) the precision of floating points can be dynamically reduced by dynamically reducing the precision of floating points. 
+    Changing the distribution of chopout (in this work we assume $Unif(\{1, 2, \dots, d\})$) is also interesting. By adapting reinforcement learning techniques, the trade-off between accuracy and reduction can be optimized.
+    
+
+    %\bibliography{references}
+    
+    %\section*{References}
+    
+    %\medskip
+    
+    %\small
+        
+    \bibliographystyle{plainnat}
+    \bibliography{references}
+    
+    \end{document}

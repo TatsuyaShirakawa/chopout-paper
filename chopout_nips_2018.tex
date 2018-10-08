@@ -1,0 +1,450 @@
+\documentclass{article}
+
+    % if you need to pass options to natbib, use, e.g.:
+    % \PassOptionsToPackage{numbers, compress}{natbib}
+    % before loading nips_2018
+        
+    % ready for submission
+    % \usepackage{nips_2018}
+
+    % to compile a preprint version, e.g., for submission to arXiv, add
+    % add the [preprint] option:
+    \usepackage[preprint]{nips_2018}
+    
+    % to compile a camera-ready version, add the [final] option, e.g.:
+    % \usepackage[final]{nips_2018}
+    
+    % to avoid loading the natbib package, add option nonatbib:
+    % \usepackage[nonatbib]{nips_2018}
+
+    \usepackage[utf8]{inputenc} % allow utf-8 input
+    \usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+    \usepackage{hyperref}       % hyperlinks
+    \usepackage{url}            % simple URL typesetting
+    \usepackage{booktabs}       % professional-quality tables
+    \usepackage{amsfonts}       % blackboard math symbols
+    \usepackage{nicefrac}       % compact symbols for 1/2, etc.
+    \usepackage{microtype}      % microtypography
+    \usepackage{amsmath}
+    \usepackage{amsthm}
+
+    \newtheorem{theorem}{Theorem}   
+    \newtheorem{lemma}{Lemma} 
+
+    \newcommand{\maximize}{\mathop{\rm maximize}\limits}
+    \newcommand{\minimize}{\mathop{\rm minimize}\limits}
+    \newcommand{\argmax}{\mathop{\rm arg~max}\limits}
+    \newcommand{\argmin}{\mathop{\rm arg~min}\limits}
+
+    
+    \title{Chopout: A Simple Way to Train Variable Sized Neural Networks at Once}
+ 
+    % The \author macro works with any number of authors. There are two
+    % commands used to separate the names and addresses of multiple
+    % authors: \And and \AND.
+    %
+    % Using \And between authors leaves it to LaTeX to determine where to
+    % break the lines. Using \AND forces a line break at that point. So,
+    % if LaTeX puts 3 of 4 authors names on the first line, and the last
+    % on the second line, try using \AND instead of \And before the third
+    % author name.
+    
+    \author{
+      Tatsuya Shirakawa \\
+      ABEJA, Inc. \\
+      \texttt{tatsuya@abejainc.com}
+      %% examples of more authors
+      %% \And
+      %% Coauthor \\
+      %% Affiliation \\
+      %% Address \\
+      %% \texttt{email} \\
+      %% \AND
+      %% Coauthor \\
+      %% Affiliation \\
+      %% Address \\
+      %% \texttt{email} \\
+      %% \And
+      %% Coauthor \\
+      %% Affiliation \\
+      %% Address \\
+      %% \texttt{email} \\
+      %% \And
+      %% Coauthor \\
+      %% Affiliation \\
+      %% Address \\
+      %% \texttt{email} \\
+    }
+    
+    \begin{document}
+    % \nipsfinalcopy is no longer used
+    
+    \maketitle
+    
+    \begin{abstract}
+      Large deep neural networks require huge memory to run and their running speed is sometimes too slow for real applications. Therefore network size reduction with keeping accuracy is crucial for practical applications. We present a novel neural network operator, \textit{chopout}, with which neural networks are trained, even in a single training process, so as to truncated sub-networks perform as well as possible. \textit{Chopout} is easy to implement and integrate into most type of existing neural networks. Furthermore it enables to reduce network size even after training just by truncating layers. We prove some theoretical aspects of \textit{chopout} and show its effectiveness through several experiments.
+    \end{abstract}
+    
+    \section{Introduction}
+    
+    % - deep leraningはデータ・ドリブンなデータサイエンスにとって必要不可欠な道具になった。
+    % - 大きさやあアーキテクチャの異なる多種類のモデルが提案されている。
+    % - 精度を出すために大きいNNがたくさん提案されている
+    %    - ILSVRCの優勝モデル達
+    %    - ResNet 1000
+    %    - over parametrize
+    % - over parametrizedなモデルの方が汎化性能がたかい
+    % - 一方で、小さいモデルの方が実行効率がよい。
+    %    - SqueezeNet, shuffle net, mobilenet v1/v2
+    % - 実行環境によっては大きなメモリを物理的に載せられない
+    % - コスト的にも小さいモデルの方がよい
+    % - リアルタイムアプリケーションの場合、リアル以上の速度が必要（精度を犠牲にして）
+    % - とくにアプリケーションとして動作させるときはコストの面でCPUで動作させることが多く、ネットワークのインファレンスコストはパラメータ数にほぼ比例する。
+    % - そのため、精度を落とさずにネットワークのサイズを小さくすることはプラクティカルには非常に重要
+    
+    Deep neural networks are crucial building blocks for current artificial intelligence (AI)  because of their outstanding performance in accuracy and ease of use.
+    Today, various sizes and types of deep neural network architectures are proposed and are applied to real applications as a de-fact standard tool to learn the implicit input-output functionality of data.
+    In the annual ImageNet Large Scale Visual Recognition Challenge (ILSVRC), winning models are becoming more and more larger every year. 
+    Moreover, some researches show that generalization error can be reduced using over-parametrized neural networks.
+
+    However these line of works does not align in the real application, where running performance in time and GPU/CPU memory consumption is not negligible. For example, in case of real-time application, inference need to be sufficiently fast. 
+
+    Therefore smaller neural networks are preferable for real application. For this end, various type of model compression techniques are actively developed, which enables reducing model parameters, for example, by pruning redundant parameters. However most of such techniques are not easy to implement on modern deep learning frameworks such as TensorFlow, Pytorch and MxNet because they often requires low level implementation which is not directly supported on such frameworks.
+
+    In this research, we proposed a novel \textit{dropout}-like easy-to-use operator, \textit{chopout}, with which deep neural networks are trained so that their truncated sub-networks also perform well. 
+
+        
+    Our main contribution in this research is as follows.
+    \begin{itemize} 
+      \item We provide a novel operator \textit{chopout} which performs dynamic network reduction in training and it is quite easy to implement and use.      
+      \item Training networks with \textit{chopout} enhance the accuracy of their truncated sub-networks as well as possible,
+      \item We prove that training linear autoencoders with \textit{chopout} is equivalent to computing principal component analysis and
+      principal components are computed simultaneously, 
+      \item We show experimentally that trained networks with chopout is competitive in model size and accuracy for current state-of-the-art network-reducing methods.
+    \end{itemize}
+
+    The rest of this paper is organized as follows: 
+    in section \ref{related_works} we relate our work with previous researches;
+    in section \ref{method} we present the \textit{chopout} for 1-d or higher dimenstional representations and run theoretical analysis for linear autoencoder case;
+    in section \ref{experiments} we provide some experiments; 
+    lastly in Section \ref{conclusion} we conclude our paper. 
+
+    \section{Related works}
+    \label{related_works}
+    % - squeeze net, shuffle net, mobile net v1/v2
+    % - sparsification (L1, variational dropout)
+    % - parameter pruning
+    % - regularization
+    % - low-rank approximation
+    % - distillation
+    Many approaches are proposed to reduce the neural network size. 
+    
+    \citet{iandola2016squeezenet} proposed SqueezeNets which utilized the fire module to reduce network parameters with keeping its accuracy. Successive research are done in this line and \citet{howard2017mobilenet} proposed MobileNets and \citet{zhang2017shufflenet} proposed ShuffleNets. The drawback of these works is that the network is fixed through training and therefore networks cannot be reduced after training.
+
+    Other line of works focus on pruning neural network parameters. \citet{han2015learning} 
+    
+    \section{Method}
+    \label{sec:method}
+    
+    \subsection{Chopout in 1D case}
+    \label{subsec:chopout-1d}
+    
+    We introduce our novel stochastic operator \textit{chopout} in 1-dimensional case. 
+    
+    At training time, \textit{Chopout} is defined as a truncation of random-length latter dimensions of vectors as follows:
+    \begin{align}
+        m &\sim P_m = P(\{0, 1, \cdots, d\}), \nonumber \\
+        \mathbf{x} &\leftarrow P_m(\mathbf{x}) := (x_1, x_2, ..., x_m, 0, ..., 0)
+    \end{align}
+    where $P_m = P(\{0, 1, \cdots, d\})$ is any discrete distribution over $\{0, 1, \cdots, d\}$ (e.g. uniform distribution), $\mathbf{x} \in \mathbb{R}^d$ is a vector and $P_m(\cdot)$ is a projection to first $m$-th dimensions. 
+    
+    \textit{Chopout}'s behavior is similar to \textit{dropout} but, instead of zeroing out random elements in \textit{dropout}, \textit{chopout} zeros out random latter consecutive elements. When back-propagating, the same latter dimensions of gradients are also truncated as well
+    \begin{align}
+        \mathbf{grad} &\leftarrow P_m(\mathbf{grad}) := ({grad}_1, {grad}_2, ..., {grad}_m, 0, ..., 0)
+    \end{align}    
+    where $\mathbf{grad}$ is a gradient back-propagated from consecutive layers and $m$ is the number drawn in the forward pass.
+    
+    At test time, \textit{chopout} is defined to behave just same as a identity function, that is, just pass through the input vector without any modification. This definition of \textit{chopout} in prediction mode is contrastive to that of \textit{dropout} because ,ordinarily, in prediction mode, \textit{dropout} is defined as a scaling operator corresponding to its drop-rate.
+    
+    Training a fully-connected neural network with applying \textit{chopout} can be interpreted as training randomly sampled sub-networks which are composed of \textit{former parts} of the original fully-connected neural network with sharing parameters.
+
+    \subsection{Chopout in the higher dimensional case}
+    \label{subsec:chopout-nd}
+    
+    \textit{Chopout} can be easily extended to higher dimensional cases as a random truncation of channels. 
+    For example, when applied to a tensor $\mathbf{x} \in 
+    \mathbb{R}^{c \times h \times w}$, the forward-propagation of \textit{chopout} is defined as
+    \begin{align}
+        m &\sim P_m = P(\{0, 1, \cdots, c\}), \nonumber \\
+        x_{kij} &\leftarrow \begin{cases}
+            x_{kij} & (k \leq m) \\
+            0 & (otherwise)
+            \end{cases} \nonumber
+    \end{align}
+    where $P(\{0, 1, \cdots, c\}$ is also arbitrary distribution as well (e.g. uniform distribution). 
+    
+    For higher dimensional case, as well as 1-d case, training a neural network with applying \textit{chopout} can be interpreted as training randomly sampled sub-networks which are composed of \textit{former parts} of the original network with sharing parameters.
+    
+    \subsection{Linear Autoencoder Case}
+    \label{subsec:linae}
+    
+    To clarify the effect of application of \textit{chopout}, we consider a simple case, that is, linear autoencoder with 1-layer encoder and decoder:
+    
+    \begin{align}
+        \mathbf{h} &= \mathbf{U} \mathbf{x} + \mathbf{b}, \nonumber \\
+        \mathbf{y} &= f(\mathbf{x}; \Theta) := \mathbf{V} \mathbf{h} + \mathbf{c} \nonumber
+    \end{align}
+    
+    where $\mathbf{x},\mathbf{h}, \mathbf{y} \in \mathbb{R}^d$ are $d$-dimensional input, hidden, output vectors respectively. $\mathbf{U}, \mathbf{V} \in \mathbb{R}^{d \times d}$ are weight matrices, $\mathbf{b}, \mathbf{c} \in \mathbb{R}^d$ are bias vectors and $\Theta = (\mathbf{U}, \mathbf{V}, \mathbf{b}, \mathbf{c})$. The loss function of this linear autoencoder is mean squared error over training samples $\{\mathbf{x}_1, \mathbf{x}_2, \cdots, \mathbf{x}_n\}$
+    
+    \begin{align}
+        \minimize_{\Theta} \ \  
+        &\frac{1}{2n} \sum_{i=1}^n \Vert \mathbf{x}_i - f(\mathbf{x}_i; \Theta) \Vert^2 \nonumber \\
+        =& \frac{1}{2n} \sum_{i=1}^n \Vert \mathbf{x}_i - \left( \mathbf{V} \left( \mathbf{U} \mathbf{x} + \mathbf{b} \right) + \mathbf{c} \right) \Vert^2 \nonumber \\
+        =& \frac{1}{2} \mathbb{E}_{\mathbf{x} \sim P_x} \Vert \mathbf{x} - \left( \mathbf{V} \left( \mathbf{U} \mathbf{x} + \mathbf{b} \right) + \mathbf{c} \right) \Vert^2 
+    \end{align}
+    where we introduced, for simplicity, $P_\mathbf{x}(\mathbf{x})$ for the uniform distribution on $\{\mathbf{x}_1, \mathbf{x}_2, \cdots, \mathbf{x}_n\}$.
+    
+    When \textit{chopout} is applied right after encoder, it becomes
+    
+    \begin{align}
+        \minimize_{\Theta} \ \ 
+         &\frac{1}{2} \mathbb{E}_{\mathbf{x} \sim P_\mathbf{x}} \mathbb{E}_{m \sim P_m} \Vert \mathbf{x} - \left( \mathbf{V} \mathbf{I}_m \left( \mathbf{U} \mathbf{x} + \mathbf{b} \right) + \mathbf{c} \right) \Vert^2 \nonumber \\
+         =& \frac{1}{2} \mathbb{E}_{m \sim P_m} \mathbb{E}_{\mathbf{x} \sim P_\mathbf{x}} \Vert \mathbf{x} - \left( \mathbf{V} \mathbf{I}_m \left( \mathbf{U} \mathbf{x} + \mathbf{b} \right) + \mathbf{c} \right) \Vert^2
+    \end{align}    
+    
+    where $mathbf{I}_m = diag(1, 1, \cdots, 1, 0, \cdots, 0)$ is a diagonal matrix whose first $m$-th diagonals are one and others are zero. 
+
+    Because minimum of expectation is greater than expectation of minimum in general, we have
+    \begin{align}
+    &\min_{\Theta} \frac{1}{2} \mathbb{E}_{m \sim P_m} \mathbb{E}_{\mathbf{x} \sim P_\mathbf{x}} \Vert \mathbf{x} - \left( \mathbf{V} \mathbf{I}_m \left( \mathbf{U} \mathbf{x} + \mathbf{b} \right) + \mathbf{c} \right) \Vert^2 \nonumber \\
+    &\geq  \frac{1}{2} \mathbb{E}_{m \sim P} \min_{\Theta}  \mathbb{E}_{\mathbf{x} \sim P_\mathbf{x}} \Vert \mathbf{x} - \left( \mathbf{V} \mathbf{I}_m \left( \mathbf{U} \mathbf{x} + \mathbf{b} \right) + \mathbf{c} \right) \Vert^2
+    \label{ineq:min_E_vs_E_min}
+    \end{align} 
+    but, in our linear autoencoder case, the equality above is provably met.
+    
+    \begin{lemma}
+    \label{lm:ae_eq}
+    Each minimization in (\ref{ineq:min_E_vs_E_min}) is achieved if we let
+    $\mathbf{U} = \mathbf{P}, \mathbf{V} = \mathbf{P}^T, \mathbf{b} = -\mathbf{U}\mathbf{\mu}, \mathbf{c} = \mathbf{\mu}$ where $\mathbf{\mu} = \mathbb{E}_{\mathbf{x} \sim P_\mathbf{x}}[\mathbf{x}]$ is the mean vector of $\mathbf{x}$s and $\mathbf{P}$ is the orthonomal matrix obtained from singular value decomposition (SVD) of $\bar{\mathbf{X}} = (\bar{\mathbf{x}}_1, \bar{\mathbf{x}}_2, \cdots, \bar{\mathbf{x}}_n) = \mathbf{P}^T \mathbf{\Sigma} \mathbf{Q}, \bar{\mathbf{x}}_i = \mathbf{x}_i - \mathbf{\mu} (i=1, 2, \cdots, n)$. Therefore the equality (\ref{ineq:min_E_vs_E_min}) is met.
+    \end{lemma}
+    \begin{proof}
+    Denote $\bar{\mathbf{x}} = \mathbf{x} - \mathbf{\mu}$ for each $\mathbf{x} \sim P_\mathbf{x}$, then we have
+    \begin{align}
+        &\mathbb{E}_{\mathbf{x} \sim P_\mathbf{x}} \Vert \mathbf{x} - \left( \mathbf{V} \mathbf{I}_m \left( \mathbf{U} \mathbf{x} + \mathbf{b} \right) + \mathbf{c} \right) \Vert^2 \nonumber \\
+        =& \ \mathbb{E}_{\mathbf{x}  \sim P_\mathbf{x}} \Vert \bar{\mathbf{x}} + \mathbf{\mu} - \left( \mathbf{V} \mathbf{I}_m \left( \mathbf{U} (\bar{\mathbf{x}} + \mathbf{\mu}) + \mathbf{b} \right) + \mathbf{c} \right) \Vert^2 \nonumber \\
+        =& \ \mathbb{E}_{\mathbf{x} \sim P_\mathbf{x}} \Vert (\mathbf{I} - \mathbf{V} \mathbf{I}_m \mathbf{U}) \bar{\mathbf{x}} +  (\mathbf{\mu} - \left( \mathbf{V} \mathbf{I}_m \left( \mathbf{U} \mathbf{\mu} + \mathbf{b} \right) + \mathbf{c} \right)) \Vert^2 \nonumber \\
+        =& \ \mathbb{E}_{\mathbf{x} \sim P_\mathbf{x}} \Vert (\mathbf{I} - \mathbf{V} \mathbf{I}_m \mathbf{U}) \bar{\mathbf{x}} \Vert^2 + \Vert   \mathbf{\mu} - \left( \mathbf{V} \mathbf{I}_m \left( \mathbf{U} \mathbf{\mu} + \mathbf{b} \right) + \mathbf{c} \right) \Vert^2 \nonumber  
+    \end{align}
+    where the last equality is met because $\mathbb{E}_{\mathbf{x} \sim P_\mathbf{x}}[\bar{\mathbf{x}}] = 0$. Therefore equation (\ref{ineq:min_E_vs_E_min}) reduce to
+    \begin{align}
+        &\frac{1}{2} \mathbb{E}_{m \sim P} \min_{\Theta}  \mathbb{E}_{\mathbf{x} \sim P_\mathbf{x}} \Vert \mathbf{x} - \left( \mathbf{V} \mathbf{I}_m \left( \mathbf{U} \mathbf{x} + \mathbf{b} \right) + \mathbf{c} \right) \Vert^2 \nonumber \\
+        =& \frac{1}{2} \mathbb{E}_{m \sim P} \min_{\Theta}
+        \mathbb{E}_{\mathbf{x} \sim P_\mathbf{x}} \Vert (\mathbf{I} - \mathbf{V} \mathbf{I}_m \mathbf{U}) \bar{\mathbf{x}} \Vert^2 + \Vert   \mathbf{\mu} - \left( \mathbf{V} \mathbf{I}_m \left( \mathbf{U} \mathbf{\mu} + \mathbf{b} \right) + \mathbf{c} \right) \Vert^2 \label{eq:lm1_proof_1}
+    \end{align} 
+    The second term of the above equation (\ref{eq:lm1_proof_1}) is easily minimized by letting
+    $\mathbf{b} = -\mathbf{U}\mathbf{\mu}, \mathbf{c} = \mathbf{\mu}$ and they are independent of $m$. Therefore (\ref{eq:lm1_proof_1}) is equivalent to
+    \begin{align}
+        &\frac{1}{2} \mathbb{E}_{m \sim P} \min_{\Theta}
+        \mathbb{E}_{\mathbf{x} \sim P_\mathbf{x}} \Vert (\mathbf{I} - \mathbf{V} \mathbf{I}_m \mathbf{U}) \bar{\mathbf{x}} \Vert^2 \nonumber \\
+        =& \frac{1}{2} \mathbb{E}_{m \sim P} \min_{\Theta}
+        \Vert \bar{\mathbf{X}} - \bar{\mathbf{X}}_m \Vert^2_F \label{eq:lm1_proof_2}
+    \end{align}
+    where $\bar{\mathbf{X}} = (\bar{\mathbf{x}}_1, \bar{\mathbf{x}}_2, \cdots, \bar{\mathbf{x}}_n) \in \mathbb{R}^{d \times n}, \bar{\mathbf{X}}_m = \mathbf{V} \mathbf{I}_m \mathbf{U} \bar{\mathbf{X}}$ and $\Vert \cdot \Vert_F$ denotes the Frobenius norm.
+    From its construction, the rank of $\bar{\mathbf{X}}_m$ is less than or equal to $m$, therefore (\ref{eq:lm1_proof_2}) is lower bounded by
+    \begin{align}
+        \frac{1}{2} \mathbb{E}_{m \sim P} \min_{rank(\bar{\mathbf{Y}}) \leq m}
+            \Vert \bar{\mathbf{X}} - \bar{\mathbf{Y}} \Vert^2_F. \label{eq:lm1_proof_3}
+    \end{align}
+    As it is known, each minimizer $\bar{\mathbf{Y}}$ of these inner rank-$m$ approximation problem are obtained via singular value decomposition (SVD) of the matrix $\bar{\mathbf{X}} = \mathbf{P}^T \mathbf{\Sigma} \mathbf{Q}$ where $\mathbf{P}$ and $\mathbf{Q}$ are orthonormal matrices and $\mathbf{\Sigma} = diag(\sigma_1, \sigma_2, \cdots, \sigma_{min(n, d)}$ is a matrix whose diagonal elements consist of singular values of $\bar{\mathbf{X}}$ in descending order ($\sigma_1 \geq \sigma_2 \geq \cdots$). For each $m$, the minimizer is explicitly obtained as $\mathbf{P}^T \mathbf{\Sigma}_m \mathbf{Q}$ where $\mathbf{\Sigma}_m$ is defined by letting $m+1, m+2, \cdots$ diagonal elements of $\mathbf{\Simga}$ to be zeros.
+    If we let $\mathbf{U} = \mathbf{P}, \mathbf{V} = \mathbf{P}^T$ we have
+    \begin{align}
+        \bar{\mathbf{X}}_m 
+        = \ \mathbf{V} \mathbf{I}_m \mathbf{U} \bar{\mathbf{X}}
+        = \ \mathbf{P}^T \mathbf{I}_m \mathbf{P} \mathbf{P}^T \mathbf{\Sigma} \mathbf{Q}
+        = \ \mathbf{P}^T \mathbf{I}_m \mathbf{\Sigma} \mathbf{Q}
+        = \ \mathbf{P}^T \mathbf{\Sigma}_m \mathbf{Q} \nonumber
+    \end{align}
+    and this minimizes (\ref{eq:lm1_proof_3}), therefore minimizes (\ref{eq:lm1_proof_2}). Hense, we have minimizers $\mathbf{U} = \mathbf{P}, \mathbf{V} = \mathbf{P}^T, \mathbf{b} = -\mathbf{U}\mathbf{\mu}, \mathbf{c} = \mathbf{\mu}$ which are all independent of $m$ and it conclude the equality (\ref{ineq:min_E_vs_E_min}).
+    \end{proof}
+    
+    \begin{theorem}
+      \label{th:svd}
+      If singular values of $\bar{\mathbf{X}} = \mathbf{P}^T \mathbf{\Sigma} \mathbf{Q}$ are all different and non zero $\sigma_1 > \sigma_2 > \cdots > \sigma_n \geq 0$ and $P_m(m) > 0$ for all $m = 0, 1, \cdots, d$, then, minimizers of (\ref{ineq:min_E_vs_E_min}) satisfies $\mathbf{U} = \mathbf{V}^{-1} = \mathbf{D} \mathbf{P}$ for some diagonal normal matrix $\mathbf{D} \in \mathbb{R}^{d \times d}$.
+    \end{theorem}
+    \begin{proof}
+    From the proof of Lemma \ref{lm:ae_eq}, we know minimizers $\mathbf{U}, \mathbf{V}$ of (\ref{ineq:min_E_vs_E_min}) also achieve minimum in the equation (\ref{eq:lm1_proof_2}) and  (\ref{eq:lm1_proof_2}). If singular values are all different, $\bar{\mathbf{Y}}_m = \mathbf{P}^T \mathbf{\Sigma}_m \mathbf{Q}$s $(m=1,2,\cdots,d)$ are unique solutions of inner minimization problems in (\ref{eq:lm1_proof_3}. Therefore we have
+    \begin{align}
+        \mathbf{V} \mathbf{I}_m \mathbf{U} \bar{\mathbf{X}}
+        = \mathbf{V} \mathbf{I}_m \mathbf{U} \mathbf{P}^T \mathbf{\Sigma} \mathbf{Q}
+        = \mathbf{P}^T \mathbf{\Sigma}_m \mathbf{Q} \nonumber
+    \end{align}
+    for all $m=0, 1, \cdots, d$.
+    By multiplying $\mathbf{Q}^{-1}$ from right side and $\mathbf{\Sigma}^{-1}$ from left side ($\mathbf{\Sigma}$ is invertible because all singular values are non zero), the second equality becomes
+    \begin{align}
+        \mathbf{V} \mathbf{I}_m \mathbf{U} \mathbf{P}^T
+        = \mathbf{P}^T \mathbf{I}_m.
+    \end{align}
+    If we let $m = d$, we have $\mathbf{V} \mathbf{U} = \mathbf{I}$, therefore, $\mathbf{V} = \mathbf{U}^{-1}$. 
+    By multiplying $\mathbf{U} = \mathbf{V}^{-1}$ from the left side, we have
+    \begin{align}
+        \mathbf{I}_m \mathbf{U} \mathbf{P}^T
+        = \mathbf{U} \mathbf{P}^T \mathbf{I}_m.
+    \end{align}
+    From this equality, $\mathbf{Z} := \mathbf{U} \mathbf{P}^T \in \mathbb{R}^{d \times d}$ need to satisfy
+    \begin{align}
+        \mathbf{Z}_{ij} = 0 (i > m or j > m)
+    \end{align}
+    for all $m = 1, 2, \cdots, d$. Hense $\mathbf{Z}$ is diagonal matrix. Letting $\mathbf{D} = \mathbf{Z}$ concludes the statement.
+    \end{proof}
+    
+
+
+    \section{Method2}
+    \label{method}
+
+    \subsection{Chopout}
+    Our proposed operator \textit{chopout} is a \textit{dropout}-like stochastic operator. 
+    When it applied to a vector $\mathbf{h} = (h_1, h_2, \dots, h_c) \in \mathbb{R}^c$ to get $chopout(\mathbf{h})$, in training phase, $\mathbf{h}$ is randomly truncated. 
+    More precisely, at the every iteration of training phase, truncation length $m$ is uniformly randomly drawn from ${1, 2, \dots, c}$ \footnote{We can consider more complex distributions instead of simple uniform distribution $Unif(\{1,2, \dots, c\})$ but we leave it to further work.} and according to the drawn $m$, $\mathbf{h}$ is truncated by zeroing out latter $c-m$ dimensions;    
+    \begin{align}
+        m &\sim Unif(\{1, 2, \dots, c\}) \nonumber \\
+        h &= chop(\mathbf{h}, m) := (h_1, h_2, \dots, h_m, 0, \dots, 0) \in \mathbb{R}^c,
+    \end{align}    
+    where $chop(\mathbf{h}, m)$ indicates the function which zeros out latter $c-m$ dimensions of $\mathbf{h}$.
+    In test phase, \textit{chopout} simply pass through the input vector $\mathbf{h}$.
+
+    We add \textit{chopout} to every before matrix multiplication is computed
+    \begin{align}
+      m &\sim Unif(\{1, 2, \dots, d_l\}), \nonumber \\
+      \mathbf{h}_{l+1} &= {\sigma}_l (\mathbf{W}_{l+1} chop(\mathbf{h}_l, m) + \mathbf{b}_{l+1}) \ \ (l=0, 1, \dots, L-1). \label{eq:nn_with_chopout}
+    \end{align}
+    
+    In this case, the original minimization \ref{original_objective} become to be
+    \begin{equation}
+      \minimize_{\mathbf{\theta}} \frac{1}{N} 
+      \mathbb{\sum}_{i=1}^N
+       \mathbb{E}_{m_1, m_2, \dots, m_L}       
+       \left[
+       loss \left(\mathbf{y}_i, f\left(\mathbf{x}_i; \mathbf{\theta}, m_1, m_2, \dots, m_L\right)\right) 
+       \right], 
+       \label{objective_with_chopout}
+    \end{equation}
+    where $f(\mathbf{x}_i; \mathbf{\theta}, m_1, m_2, \dots, m_L)$ is the neural network defined as \ref{eq:nn_with_chopout} given and the expectation is taken over $m_i \sim Unif(\{1, 2, \dots, d_i\})$ for all $i=1,2,\dots,L$. The neural network $f\left(\mathbf{x}_i; \mathbf{\theta}, m_1, m_2, \dots, m_L\right)$ can be seen as \textit{a former sub-network} of $f(x;
+    \mathbf{\theta}) := f(\mathbf{x}_i; \mathbf{\theta}, d_1, d_2, \dots, d_L)$, of which parameters in $i$-th layer are former $d_i$ dimensions of $i$-th layer of $f(\mathbf{x};\mathbf{\theta})$. Therefore training the neural network with \textit{chopout} \ref{eq:nn_with_chopout} through data $(\mathbf{x}, \mathbf{y})$ can be interpreted as repeating following two steps;
+    \begin{enumerate}
+      \item sampling sub-network whose layers are former parts of original network of correspondence depth,
+      \item training the drawn sub-network through $(\mathbf{x}, \mathbf{y})$.
+    \end{enumerate}
+
+    This interpretation lead to the intuition that, by training with chopout, the original neural network \ref{eq:nn} becomes to robust, even after training, against truncation of each layer with keeping its accuracy as much as possible because, during training, each former sub-network are drawn and trained so as to minimize the loss value.
+
+    We can extend \textit{chopout} to convolutional operators by randomly truncating channels of convolutional operators. 
+    
+    \subsection{Simultaneous computation of SVD with chopout}
+    
+    We investigate an application of chopout in a quite simple case where the neural network is linear autoencoder with one-layer encoder and decoder
+    \begin{align}
+      &\hat{\mathbf{x}} = f(\mathbf{x}) =  dec(chopout(enc(\mathbf{x}))), \nonumber \\
+      &\mathbf{h} = enc(\mathbf{x}) = \mathbf{U} \mathbf{x} + \mathbf{b}, \nonumber \\      
+      &\mathbf{h}^\prime = chopout(\mathbf{h}), \label{eq:svd_with_chopout}\\
+      &dec(\mathbf{h}^\prime) = \mathbf{V} \mathbf{h}^\prime + \mathbf{c}. \nonumber 
+    \end{align}
+    where $\mathbf{x}, \mathbf{b}, \mathbf{c}, \mathbf{h}, \mathbf{h}^\prime, \hat{\mathbf{x}} \in \mathbb{R}^d$ and  $\mathbf{U}, \mathbf{V} \in \mathbb{R}^{d \times d}$. 
+    For technical reasons, only in this subsection, we assume that \textit{chopout} draws $m$ according to $Unif(\{0, 1, \dots, d\})$ instead of $Unif(\{1, 2, \dots, d\})$ 
+    \footnote{this change is trivial but necessary for proving the theorem \ref{th:svd}}.
+    Note that the reconstruction function $f(\mathbf{x})$ is a stochastic function because chopout is introduced. $\hat{\mathbf{x}}$ is also a stochastic variable as well.
+
+    We let the loss function to be the mean squared error between given original input $\mathbf{x}$ and reconstructed input $\hat{\mathbf{x}}$ so that, given dataset $X = \{\mathbf{x}_i\}_{i=1}^N$, we have minimization problem of
+    \begin{align}
+      \minimize_{\mathbf{\theta} = \left\{ \mathbf{U}, \mathbf{V}, \mathbf{b}, \mathbf{c}\right\}} &\frac{1}{N} \sum_{i=1}^N \mathbb{E}_{m \sim r} \frac{1}{2} \Vert \mathbf{x}_i - \left( \mathbf{V} chop(\mathbf{U} \mathbf{x} + \mathbf{b}, m) + \mathbf{c} \right) \Vert^2 \label{eq:linae}
+    \end{align}
+    where $r = Unif(\{0,1,\dots,d\})$ is a uniform distribution over $\{0, 1, \dots, d\}$.
+    If we \textbf{do not} introduce \textit{chopout} in equation \ref{eq:svd_with_chopout}, the minimization \ref{eq:linae} is apparently of useless because the optimal $f(x)$ is identity. However, with \textit{chopout}, we can prove that minimizing \ref{eq:linae} is equivalent to computing the Singular Value Decomposition (SVD). Interestingly this computation is done simultaneously over all principal components at once.
+
+    \begin{theorem}
+      \label{th:svd}
+      Assume dataset $\mathbf{X} = \{\mathbf{x}_i \}_{i=1}^N$
+      is not contained in any lower-dimensional sub-space.
+      Then the minimization problem \ref{eq:linae} is equivalent to solving SVD, that is, if $\mathbf{\theta}^\ast = \{\mathbf{U}^\ast, \mathbf{V}^\ast, \mathbf{b}^\ast, \mathbf{c}^\ast\}$ is the minimizer of \ref{eq:linae} then we have 
+      \begin{enumerate}
+        \item $\mathbf{b}^\ast = -\mathbf{U}^\ast \mathbf{\mu}$ where $\mathbf{\mu} := \sum_{i=1}^N \mathbf{x}_i$ / N,
+        \item $\mathbf{c}^\ast = \mathbf{\mu}$,
+        \item $m$-th row vector of $\mathbf{U}$ and $m$-th column vector of $\mathbf{V}^\ast$ are both parallel to $m$-th principal component of $X$.
+      \end{enumerate}
+    \end{theorem}
+    \begin{proof}
+      Let $\mathbf{I}_m = diag(1, 1, \dots, 1, 0, \dots, 0)$ to be a diagonal matrix of which first $m$ diagonal values are 1 and rest are 0. Further let $q = Unif(\{\mathbf{x}_1, \mathbf{x}_2, \dots, \mathbf{x}_N\})$ to be a uniform distribution over dataset $X$ and define $\bar{\mathbf{x}} := \mathbf{x} - \mu$ and $\bar{q} = Unif(\{ \bar{\mathbf{x}_1}, \bar{\mathbf{x}_2}, \dots, \bar{\mathbf{x}_N} \})$. Then we have
+      \begin{align}      
+        \min_\mathbf{\theta} & \mathbb{E}_{\mathbf{x} \sim q} \mathbb{E}_{m \sim r} \left[ \frac{1}{2} \Vert \mathbf{x} - (\mathbf{V} chop(\mathbf{U}\mathbf{x} + \mathbf{b}, m) + \mathbf{c})  \Vert ^2 \right] \nonumber \\
+        &= \min_\mathbf{\theta} \mathbb{E}_{\mathbf{x} \sim q} \mathbb{E}_{m \sim r} \left[ \frac{1}{2} \Vert \mathbf{x} - \left(\mathbf{V} \mathbf{I}_m (\mathbf{U} \mathbf{x} + \mathbf{b}) + \mathbf{c} \right)  \Vert ^2 \right] \nonumber \\
+        &= \min_\mathbf{\theta} \mathbb{E}_{m \sim r} \mathbb{E}_{\mathbf{x} \sim q} \left[ \frac{1}{2} \Vert \mathbf{x} - \left(\mathbf{V} \mathbf{I}_m (\mathbf{U} \mathbf{x} + \mathbf{b}) + \mathbf{c} \right)  \Vert ^2 \right] \nonumber \\
+        &= \min_\mathbf{\theta} \mathbb{E}_{m \sim r} \mathbb{E}_{\bar{\mathbf{x}} \sim \bar{q}} \left[ \frac{1}{2} \Vert (\bar{\mathbf{x}} + \mathbf{\mu}) - \left(\mathbf{V} \mathbf{I}_m (\mathbf{U} (\bar{\mathbf{x}} + \mathbf{\mu}) + \mathbf{b}) + \mathbf{c} \right)  \Vert ^2 \right] \nonumber \\       
+        &= \min_\mathbf{\theta} \mathbb{E}_{m \sim r} \mathbb{E}_{\bar{\mathbf{x}} \sim \bar{q}} \left[ \frac{1}{2} \Vert \bar{\mathbf{x}} - \mathbf{V} \mathbf{I}_m \mathbf{U} \bar{\mathbf{x}} \Vert^2 
+        + \frac{1}{2} \Vert \mathbf{V} \mathbf{I}_m (\mathbf{U} \mathbf{\mu} + \mathbf{b}) + \mathbf{c} - \mathbf{\mu} \Vert ^2 \right] \label{eq:proof_1}        
+      \end{align}
+      The equation \ref{eq:proof_1} follows from the fact $\mathbf{E}_{\bar{\mathbf{x}} \sim \bar{q}}[\bar{\mathbf{x}}] = 0$. 
+      
+      Noting that we can zero out the second term of \ref{eq:proof_1} by letting $\mathbf{b} = -\mathbf{U} \mathbf{\mu}$ and $\mathbf{c} = \mathbf{\mu}$, we have
+      \begin{equation}
+        \mathbf{V^\ast} \mathbf{I}_m (\mathbf{U^\ast} \mathbf{\mu} + \mathbf{b^\ast}) + \mathbf{c^\ast} - \mathbf{\mu}  = 0 \ \ (m=0, 1, \dots,d). \label{eq:proof_2}
+      \end{equation}      
+      Therefore equation \ref{eq:proof_1} is equal to
+      \begin{equation}
+      \min_{\mathbf{U}, \mathbf{V}} \mathbb{E}_{m \sim r} \mathbb{E}_{\bar{\mathbf{x}} \sim \bar{q}} \left[ \frac{1}{2} \Vert \bar{\mathbf{x}} - \mathbf{V} \mathbf{I}_m \mathbf{U} \bar{\mathbf{x}} \Vert^2 \right]  \label{eq:proof_3}
+      \end{equation}
+
+      and the property 3 in theorem follows from the bellow lemma \ref{lm:svd}. 
+      
+      Lastly we show property 1 and 2 in theorem. By letting $m=0$ we have $\mathbf{c}^\ast = \mathbf{\mu}$ and 
+      \begin{equation}
+        \mathbf{V}^\ast \mathbf{I}_m (\mathbf{U^\ast} \mathbf{\mu} + \mathbf{b^\ast}) = 0 \ \ (m=0, 1, \dots, d).
+      \end{equation}
+      By letting $m=d$ and multiplying $(\mathbf{V}^\ast)^{-1}$ from the left hand of the \ref{eq:proof_2} we have $\mathbf{b}^\ast = - \mathbf{U}^\ast \mathbf{\mu}$.
+    \end{proof}
+
+    \begin{lemma}
+      \label{lm:svd}
+      Let $\mathbf{U}^\ast$ and $\mathbf{V}^\ast$ be the minimizer of equation \ref{eq:proof_3} then 
+      \begin{enumerate}
+        \item $m$-th row vector of $\mathbf{U}$ and $m$-th column vector of $\mathbf{V}^\ast$ are both parallel to $m$-th principal component of $X$ and
+        \item $\mathbf{U}^\ast$ and $\mathbf{V}^\ast$ are invertible.
+      \end{enumerate}
+    \end{lemma}
+    \begin{proof}
+      We have
+      \begin{equation}
+        \min_{\mathbf{U}, \mathbf{V}} \mathbb{E}_{m \sim r} \mathbb{E}_{\bar{\mathbf{x}} \sim \bar{q}} \left[ \frac{1}{2} \Vert \bar{\mathbf{x}} - \mathbf{V} \mathbf{I}_m \mathbf{U} \bar{\mathbf{x}} \Vert^2 \right]  
+        \geq \mathbb{E}_{m \sim r} \left[ \min_{\mathbf{U}, \mathbf{V}} \mathbb{E}_{\bar{\mathbf{x}} \sim \bar{q}} \left[ \frac{1}{2} \Vert \bar{\mathbf{x}} - \mathbf{V} \mathbf{I}_m \mathbf{U} \bar{\mathbf{x}} \Vert^2 \right] \right]
+        \label{eq:proof_4}
+      \end{equation}
+      and equality can be achieved when we compute $\mathbf{V}, \mathbf{U}$ by the Power Iteration Method. Therefore the optima of left hand side is also that of right hand side. However the optima of right hand side is achieved only when
+      
+      If the property 1 of lemma is satisfied then the property 2 is apparently follows because we assumed that $\mathbf{X}=\{x_i\}_{i=1}^N$ is not contained in any lower-dimensional sub-space. 
+
+      
+    \end{proof}    
+
+    \section{Experiments}
+    \label{experiments}
+
+
+    \section{Conclusion}
+    \label{conclusion}
+    We introduced a novel and easy-to-use operator \textit{chopout} and showed that, with \textit{chopout}, neural networks become to be accurate even if their intermediate layers are highly truncated. 
+    We believe that dynamic size reduction technique as chopout can be further applied to other settings. For example, (1) depth of neural networks can be dynamically reduced by dynamically skipping the deeper layers (e.g. successive residual blocks in ResNet) and (2) the precision of floating points can be dynamically reduced by dynamically reducing the precision of floating points. 
+    Changing the distribution of chopout (in this work we assume $Unif(\{1, 2, \dots, d\})$) is also interesting. By adapting reinforcement learning techniques, the trade-off between accuracy and reduction can be optimized.
+    
+
+    %\bibliography{references}
+    
+    %\section*{References}
+    
+    %\medskip
+    
+    %\small
+        
+    \bibliographystyle{plainnat}
+    \bibliography{references}
+    
+    \end{document}
