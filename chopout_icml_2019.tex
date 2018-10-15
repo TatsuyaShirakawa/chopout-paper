@@ -284,7 +284,7 @@
     
     \begin{theorem}
       \label{th:svd}
-      If singular values of $\bar{\mathbf{X}} = \mathbf{P}^T \mathbf{\Sigma} \mathbf{Q}$ are all different and non zero $\sigma_1 > \sigma_2 > \cdots > \sigma_n \geq 0$ and $P_m(m) > 0$ for all $m = 0, 1, \cdots, d$, then, minimizers of (\ref{ineq:min_E_vs_E_min}) satisfies $\mathbf{U} = \mathbf{V}^{-1} = \mathbf{D} \mathbf{P}$ for some diagonal invertible matrix $\mathbf{D} \in \mathbb{R}^{d \times d}$.
+      If singular values of $\bar{\mathbf{X}} = \mathbf{P}^T \mathbf{\Sigma} \mathbf{Q}$ are all different and non zero $\sigma_1 > \sigma_2 > \cdots > \sigma_n \geq 0$ and $P_m(m) > 0$ for all $m = 1, \cdots, d$, then, minimizers of (\ref{ineq:min_E_vs_E_min}) satisfies $\mathbf{U} = \mathbf{V}^{-1} = \mathbf{D} \mathbf{P}$ for some diagonal invertible matrix $\mathbf{D} \in \mathbb{R}^{d \times d}$.
     \end{theorem}
     \begin{proof}
     From the proof of Lemma \ref{lm:ae_eq}, we know minimizers $\mathbf{U}, \mathbf{V}$ of (\ref{ineq:min_E_vs_E_min}) also achieve minimum in the equation (\ref{eq:lm1_proof_2}) and  (\ref{eq:lm1_proof_2}). If singular values are all different, $\bar{\mathbf{Y}}_m = \mathbf{P}^T \mathbf{\Sigma}_m \mathbf{Q}$s $(m=1,2,\cdots,d)$ are unique solutions of inner minimization problems in (\ref{eq:lm1_proof_3}. Therefore we have
@@ -305,9 +305,9 @@
         \mathbf{I}_m \mathbf{U} \mathbf{P}^T
         = \mathbf{U} \mathbf{P}^T \mathbf{I}_m.
     \end{align}
-    From this equality, $\mathbf{Z} := \mathbf{U} \mathbf{P}^T \in \mathbb{R}^{d \times d}$ need to satisfy
+    From this equality and out assamption of $P_m(m) >0$ for all $m=0, 1, \cdots, d$, $\mathbf{Z} := \mathbf{U} \mathbf{P}^T \in \mathbb{R}^{d \times d}$ need to satisfy
     \begin{align}
-        \mathbf{Z}_{ij} = 0 (i > m or j > m)
+        \mathbf{Z}_{ij} = 0 \ \  (i > m \ \  or \ \ j > m)
     \end{align}
     for all $m = 1, 2, \cdots, d$. Hense $\mathbf{Z}$ is diagonal matrix. Letting $\mathbf{D} = \mathbf{Z}$ concludes the statement.
     \end{proof}
