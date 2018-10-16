@@ -87,7 +87,7 @@
     \maketitle
     
     \begin{abstract}
-      Large deep neural networks require huge memory to run and their running speed is sometimes too slow for real applications. Therefore network size reduction with keeping accuracy is crucial for practical applications. We present a novel neural network operator, \textit{chopout}, with which neural networks are trained, even in a single training process, so as to truncated sub-networks perform as well as possible. \textit{Chopout} is easy to implement and integrate into most type of existing neural networks. Furthermore it enables to reduce size of networks and latent representations even after training just by truncating layers. We prove some theoretical aspects of \textit{chopout} and show its effectiveness through several experiments.
+      Large deep neural networks require huge memory to run and their running speed is sometimes too slow for real applications. Therefore network size reduction with keeping accuracy is crucial for practical applications. We present a novel neural network operator, \textit{chopout}, with which neural networks are trained, even in a single training process, so as to truncated sub-networks perform as well as possible. \textit{Chopout} is easy to implement and integrate into most type of existing neural networks. Furthermore it enables to reduce size of networks and latent representations even after training just by truncating layers. We show its effectiveness through several experiments.
     \end{abstract}
     
     % =========================================================
@@ -119,7 +119,7 @@
     % =========================================================
     \label{sec:method}
     
-    \begin{figure}[h]
+    \begin{figure}
     \begin{minipage}{0.33\linewidth}
       \begin{center}
         \includegraphics[scale=0.13]{input.png}
@@ -147,15 +147,15 @@
         m \sim P_m = P(\{0, 1, \cdots, d\}), \ \ 
         \mathbf{x} \leftarrow {proj}_m(\mathbf{x}) := (x_1, x_2, ..., x_m, 0, ..., 0) \nonumber
     \end{align}
-    where $P_m = P(\{0, 1, \cdots, d\})$ is any discrete distribution over $\{0, 1, \cdots, d\}$ (e.g. uniform distribution), $\mathbf{x} \in \mathbb{R}^d$ is a vector and ${proj}_m(\cdot)$ is a projection to first $m$-th dimensions. 
-    \textit{Chopout}'s behavior is similar to \textit{dropout} but, instead of zeroing out random elements in \textit{dropout}, \textit{chopout} zeros out random latter consecutive elements. When back-propagating, the same latter dimensions of gradients are also truncated as well
+    where $P_m = P(\{0, 1, \cdots, d\})$ is aan arbitrary discrete distribution over $\{0, 1, \cdots, d\}$ (e.g. uniform distribution), $\mathbf{x} \in \mathbb{R}^d$ is a vector and ${proj}_m(\cdot)$ is a projection to first $m$-th dimensions. 
+    \textit{Chopout}'s behavior is similar to \textit{dropout} but, instead of zeroing out random elements in \textit{dropout}, \textit{chopout} zeros out random latter consecutive elements. In back-propagation, the same latter dimensions of gradients are also zeroed out as well
     \begin{align}
         \mathbf{grad} &\leftarrow {proj}_m(\mathbf{grad}) := ({grad}_1, {grad}_2, ..., {grad}_m, 0, ..., 0) \nonumber
     \end{align}    
-    where $\mathbf{grad}$ is a gradient back-propagated from consecutive layers and $m$ is the number drawn in the forward pass. 
+    where $\mathbf{grad}$ is a gradient and $m$ is the number drawn in the forward pass. 
     %We denote $chopout(\mathbf{x}; P_m)$ or simplty $chopout(\mathbf{x})$ for the above operator.
     
-    At test time, \textit{chopout} is defined to behave just same as a identity function, that is, just pass through the input vector without any modification. This definition of \textit{chopout} in prediction mode is contrastive to that of \textit{dropout} because ,ordinarily, in prediction mode, \textit{dropout} is defined as a scaling operator corresponding to its drop-rate.
+    At test time, \textit{chopout} is defined to behave as a identity function, that is, just pass through the input vector without any modification. This definition of \textit{chopout} in prediction mode is contrastive to that of \textit{dropout} because ,ordinarily, in prediction mode, \textit{dropout} is defined as a scaling operator corresponding to its drop-rate.
     
     Training a fully-connected neural network with applying \textit{chopout} can be interpreted as training randomly sampled sub-networks which are obtained by cuttinng out \textit{former parts} of the original fully-connected neural network with sharing parameters.
 
@@ -167,7 +167,7 @@
             0 & (otherwise)
             \end{cases} \nonumber
     \end{align}
-    where $P(\{0, 1, \cdots, c\}$ is also arbitrary distribution as well (e.g. uniform distribution). 
+    where $P(\{0, 1, \cdots, c\}$ is also an arbitrary distribution as well.
 
     % =========================================================    
     \section{Experiments}
@@ -178,7 +178,7 @@
 
     \subsection{Autoencoder}
 
-    \begin{table}[h]
+    \begin{table}
         \caption{Autoencoders used in experiments. L(n) denotes the linear layer with $n$-dimensional output, R denotes the rectified linear unit function and S denotes the sigmoid function. \textit{Chopout} and \textit{dropout} is applied right after applying the encoder.}    
         \centering
         \begin{tabular}{c|c|c}
@@ -188,22 +188,22 @@
         \label{tab:mnist_ae}
     \end{table}
     
-    \begin{figure}[h]
+    \begin{figure}
     \begin{minipage}{0.33\linewidth}
       \begin{center}
-        \includegraphics[scale=0.4]{mnist_ae_chopout_100.jpg}
+        \includegraphics[scale=0.4]{mnist_ae_wo_50.jpg}
         \hspace{1.6cm} (a) normal
       \end{center}
     \end{minipage}
     \begin{minipage}{0.33\linewidth}
       \begin{center}
-        \includegraphics[scale=0.4]{mnist_ae_chopout_100.jpg}
+        \includegraphics[scale=0.4]{mnist_ae_dropout_50.jpg}
         \hspace{1.6cm} (b) with dropout(p=0.5)
       \end{center}
     \end{minipage}
     \begin{minipage}{0.33\linewidth}
       \begin{center}
-        \includegraphics[scale=0.4]{mnist_ae_chopout_100.jpg}
+        \includegraphics[scale=0.4]{mnist_ae_chopout_50.jpg}
         \hspace{1.6cm} (c) with chopout
       \end{center}
     \end{minipage}    
@@ -212,7 +212,7 @@
     \label{fig:mnist_ae}
     \end{figure}
     
-    We train autoencoders on MNIST. Results are shown in Table \ref{tab:mnist_ae} and Figure \ref{fig:mnist_ae}. We see that by applying \textit{chopout} on hidden layer of the autoencoder, the reconstruction is kept well even after the hidden layer is truncated.
+    We train autoencoders on MNIST (Table \ref{tab:mnist_ae}, Figure \ref{fig:mnist_ae}). We see that by applying \textit{chopout} on hidden layer of the autoencoder, the reconstruction is kept well even after the hidden layer is truncated.
     
     \subsection{Skip-gram}
     
@@ -230,19 +230,26 @@
         \label{tab:skip_gram}
     \end{table}    
     
-    We apply \textit{chopout} for embeddings trained through skip-gram models (\citet{mikolov2013efficient, mikolov2013distributed}). We use text8 corpus \footnote{http://mattmahoney.net/dc/text8.zip}. We set the window size to 5 and ignore infrequent words which appear less than 20 times in the corpus. The result shows that learnt embeddings with chopout can keep informative even if embeddings are truncated.
+    We apply \textit{chopout} for embeddings trained through skip-gram models (\citet{mikolov2013efficient, mikolov2013distributed}). We use text8 corpus \footnote{http://mattmahoney.net/dc/text8.zip}. We set the window size to 5 and ignore infrequent words which appear less than 20 times in the corpus. The result (Table \ref{tab:skip_gram}) shows the consistency of embeddings.
 
     \subsection{Image classification}
     
-    \section{Discussion}
-    We introduced a novel and easy stochastic operator \textit{chopout} and showed it gather important information in the former parts of layers. Because the concept of \textit{chopout} is very flexible, there could be broad direction of further research.
+    \begin{wrapfigure}{r}{75mm}
+    \centering
+    \includegraphics[clip, width=75mm]{lenet-300-100_mnist.png}
+    \caption{chopout/dropout is applied in each intermediate layer.}
+    \label{fig:lenet-300-100_mnist}
+    \end{wrapfigure}
     
-    (1) The distribution $P_m(\{0, 1, \cdots, d\})$ should be explored. If we put \textit{chopout}s in every layer of a neural network, then, in training, there could be a layer where drawn $m \sim P_m(\{0, 1, \cdots, d\})$ is very small and it could be bottleneck of the prediction.
+    We train LeNet-300-100 (\citet{lecun1998gradient}) on MNIST with and without \textit{chopout} and \textit{dropout} in each intermediate layer (Figure \ref{fig:lenet-300-100_mnist}). This is a very initial experiment but the result shows training with \textit{chopout} enhance the robustness of networks against pruning.
+    
+    \section{Discussion}
+    We introduced a novel and easy stochastic operator \textit{chopout} and showed it gather important information in the former parts of layers. Because the concept of \textit{chopout} is very simple and flexible, there could be broad direction of further research.
 
+    (1) The distribution $P_m(\{0, 1, \cdots, d\})$ should be explored. If we put \textit{chopout}s in every layer of a neural network, then, in training, there could be a layer where drawn $m \sim P_m(\{0, 1, \cdots, d\})$ is very small and it could be bottleneck of the prediction accuracy.
+    
     (2) \textit{Chopout} can be used for network pruning. The information-gathering property of \textit{chopout} enables to prune latter dimensions/channels of layers with keeping accuracy but the extent of pruning is still be explored. For this end, reinforcement learning techniques (e.g. bandit algorithms) can be used to detect the appropreate pruning ratio. Combination with weight pruning methods are also interesting as well.
 
-    (3) \textit{Chopout} can also be applied to the depth direction of deep neural networks, which enhance early stopping in prediction.
-    
     %\bibliography{references}
     
     %\section*{References}
