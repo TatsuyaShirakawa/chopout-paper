@@ -94,18 +94,18 @@
     \section{Introduction}
     % =========================================================
     
-    Deep neural networks are crucial building blocks for current artificial intelligence (AI)  because of their outstanding performance in accuracy and ease of use. However, such deep neural networks sometimes run too slow and consume too much memories and, therefore, neural networks with less parameters are preferable for applications.
+    Deep neural networks are crucial building blocks for current machine learning because of their outstanding performance in accuracy and ease of use. However, such deep neural networks sometimes run too slow and consume too much memories. Therefore, neural networks with less parameters are preferable for applications.
     
     For this end, various parameter size reduction techniques are developed. They includes 
-    (1) pruning techniques which aim to prune weights, channels or layers of neural networks (\citet{han2015deep, aghasi2017nettrim, dong2017learning, molchanov2016pruning, li2017pruning, luo2017thinet, ye2018rethinking, liu2017learning, he2017channel}), 
-    (2) quantization techniques which aim to quantize weights of neural networks into $\{+1, -1\}$ or lower precision floating points (e.g. fp16) (\citet{han2015learning, courbariaux2015binaryconnect, rastegari2016xnor, zhou2016dorefa, zhu2016trained,  wu2016quantized, hubara2017quantized}), 
-    (3) decomposition techniques which aim to decompose weights with combinations of smaller components (e.g. SVD) (\citet{denton2014exploiting, jaderberg2014speeding, lebedev2014speeding, yang2015deep, novikov2015tensorizing}), 
-    (4) distillation techniques which aim to train smaller neural networks (student networks) to mimic trained larger neural networks (teacher networks) (\citet{hinton2015distilling, mishra2017apprentice, polino2018model}) and 
-    (5) techniques which aim to design more compact but accurate neural networks (\citet{iandola2016squeezenet, howard2017mobilenet, sandler2018mobilenetv2, zhang2017shufflenet}).
+    (1) pruning techniques which aim to prune weights, channels or layers of neural networks \cite{han2015deep, aghasi2017nettrim, dong2017learning, molchanov2016pruning, li2017pruning, luo2017thinet, ye2018rethinking, liu2017learning, he2017channel}, 
+    (2) quantization techniques which aim to quantize weights of neural networks into $\{+1, -1\}$ or lower precision floating points (e.g. fp16) \cite{han2015learning, courbariaux2015binaryconnect, rastegari2016xnor, zhou2016dorefa, zhu2016trained,  wu2016quantized, hubara2017quantized}, 
+    (3) decomposition techniques which aim to decompose weights with combinations of smaller components (e.g. SVD) \cite{denton2014exploiting, jaderberg2014speeding, lebedev2014speeding, yang2015deep, novikov2015tensorizing}, 
+    (4) distillation techniques which aim to train smaller neural networks (student networks) to mimic trained larger neural networks (teacher networks) \cite{hinton2015distilling, mishra2017apprentice, polino2018model} and 
+    (5) techniques which aim to design more compact but accurate neural networks \cite{iandola2016squeezenet, howard2017mobilenet, sandler2018mobilenetv2, zhang2017shufflenet}.
 
-    These techniques sometimes can achieve remarkable parameter reduction without too much accuracy decrease. However some of them have limitations of network architectures, are hard to implement using modern deep learning frameworks such as TensorFlow (\citet{abadi2016tensorflow}), Pytorch (\citet{paszke2017automatic}), or MxNet (\citet{chen2015mxnet}) or require model specific adaptations.
+    These techniques sometimes can achieve remarkable parameter size reduction without too much accuracy decrease. However some of them have limitations of network architectures, are hard to implement using modern deep learning frameworks such as TensorFlow \cite{abadi2016tensorflow}, Pytorch \cite{paszke2017automatic} or MxNet \cite{chen2015mxnet} or require model specific adaptations.
 
-    In this research, we proposed a novel stochastic operator \textit{chopout} which is similar to \textit{dropout} (\citet{srivastava2014dropout}) but randomly truncate latter dimensions/channels of layers in neural networks, with which deep neural networks are trained so that their truncated sub-networks also perform well. 
+    In this research, we proposed a novel simple stochastic operator \textit{chopout} which is similar to \textit{dropout} \cite{srivastava2014dropout} but randomly truncate latter dimensions/channels of layers in neural networks, with which deep neural networks are trained so that their truncated sub-networks also perform well. 
 
     %Our main contribution in this research is as follows:
     %\begin{itemize} 
@@ -147,19 +147,19 @@
         m \sim P_m = P(\{0, 1, \cdots, d\}), \ \ 
         \mathbf{x} \leftarrow {proj}_m(\mathbf{x}) := (x_1, x_2, ..., x_m, 0, ..., 0) \nonumber
     \end{align}
-    where $P_m = P(\{0, 1, \cdots, d\})$ is aan arbitrary discrete distribution over $\{0, 1, \cdots, d\}$ (e.g. uniform distribution), $\mathbf{x} \in \mathbb{R}^d$ is a vector and ${proj}_m(\cdot)$ is a projection to first $m$-th dimensions. 
-    \textit{Chopout}'s behavior is similar to \textit{dropout} but, instead of zeroing out random elements in \textit{dropout}, \textit{chopout} zeros out random latter consecutive elements. In back-propagation, the same latter dimensions of gradients are also zeroed out as well
+    where $P_m = P(\{0, 1, \cdots, d\})$ is an arbitrary discrete distribution over $\{0, 1, \cdots, d\}$ (e.g. uniform distribution), $\mathbf{x} \in \mathbb{R}^d$ is a vector and ${proj}_m(\cdot)$ is a projection onto first $m$-th dimensions. 
+    \textit{Chopout}'s behavior is similar to \textit{dropout} but, instead of zeroing out random elements in \textit{dropout}, \textit{chopout} zeros out (or truncates) random latter consecutive elements. In back-propagation, the same latter dimensions of gradients are also zeroed out as well
     \begin{align}
         \mathbf{grad} &\leftarrow {proj}_m(\mathbf{grad}) := ({grad}_1, {grad}_2, ..., {grad}_m, 0, ..., 0) \nonumber
     \end{align}    
     where $\mathbf{grad}$ is a gradient and $m$ is the number drawn in the forward pass. 
     %We denote $chopout(\mathbf{x}; P_m)$ or simplty $chopout(\mathbf{x})$ for the above operator.
     
-    At test time, \textit{chopout} is defined to behave as a identity function, that is, just pass through the input vector without any modification. This definition of \textit{chopout} in prediction mode is contrastive to that of \textit{dropout} because ,ordinarily, in prediction mode, \textit{dropout} is defined as a scaling operator corresponding to its drop-rate.
+    At test time, \textit{chopout} is defined to behave as a identity function, that is, just pass through the input vector without any modification. This definition of \textit{chopout} in prediction mode is contrastive to that of \textit{dropout}, which, in prediction time, \textit{dropout} scale inputs to make it consistent with training time.
     
-    Training a fully-connected neural network with applying \textit{chopout} can be interpreted as training randomly sampled sub-networks which are obtained by cuttinng out \textit{former parts} of the original fully-connected neural network with sharing parameters.
+    Training a fully-connected neural network with applying \textit{chopout} can be interpreted as simultaneous training of randomly sampled sub-networks which are obtained by cuttinng out \textit{former parts} of the original fully-connected neural network with sharing parameters.
 
-    For higher dimensional case, \textit{chopout} can be easily extended as a random truncation of channels.  For example, when applied to a tensor $\mathbf{x} \in \mathbb{R}^{c \times h \times w}$, the forward-propagation of \textit{chopout} is defined as
+    In higher dimensional cases, \textit{chopout} can be easily extended as a random truncation of channels instead of dimensions.  For example, when applied to a tensor $\mathbf{x} \in \mathbb{R}^{c \times h \times w}$, the forward-propagation of \textit{chopout} is defined as
     \begin{align}
         m \sim P_m = P(\{0, 1, \cdots, c\}), \ \ 
         x_{kij} \leftarrow \begin{cases}
@@ -167,7 +167,7 @@
             0 & (otherwise)
             \end{cases} \nonumber
     \end{align}
-    where $P(\{0, 1, \cdots, c\}$ is also an arbitrary distribution as well.
+    where $P(\{0, 1, \cdots, c\})$ is an arbitrary distribution. Back-propagation is defined in the same way.
 
     % =========================================================    
     \section{Experiments}
@@ -212,7 +212,7 @@
     \label{fig:mnist_ae}
     \end{figure}
     
-    We train autoencoders on MNIST (Table \ref{tab:mnist_ae}, Figure \ref{fig:mnist_ae}). We see that by applying \textit{chopout} on hidden layer of the autoencoder, the reconstruction is kept well even after the hidden layer is truncated.
+    We train autoencoders on MNIST \cite{lecun1998gradient}, Table \ref{tab:mnist_ae}, Figure \ref{fig:mnist_ae}. We see that by applying \textit{chopout} on the hidden layer of the autoencoder, the reconstruction is kept well even after the hidden layer is truncated.
     
     \subsection{Skip-gram}
     
@@ -230,25 +230,26 @@
         \label{tab:skip_gram}
     \end{table}    
     
-    We apply \textit{chopout} for embeddings trained through skip-gram models (\citet{mikolov2013efficient, mikolov2013distributed}). We use text8 corpus \footnote{http://mattmahoney.net/dc/text8.zip}. We set the window size to 5 and ignore infrequent words which appear less than 20 times in the corpus. The result (Table \ref{tab:skip_gram}) shows the consistency of embeddings.
+    We apply \textit{chopout} for embeddings trained through skip-gram models \cite{mikolov2013efficient, mikolov2013distributed}. We use text8 corpus\footnote{http://mattmahoney.net/dc/text8.zip}. We set the window size to 5 and ignore infrequent words which appear less than 20 times in the corpus. The result (Table \ref{tab:skip_gram}) shows the consistency of embeddings.
 
     \subsection{Image classification}
     
-    \begin{wrapfigure}{r}{75mm}
+    \begin{wrapfigure}[13]{r}{75mm}
     \centering
     \includegraphics[clip, width=75mm]{lenet-300-100_mnist.png}
     \caption{chopout/dropout is applied in each intermediate layer.}
     \label{fig:lenet-300-100_mnist}
     \end{wrapfigure}
     
-    We train LeNet-300-100 (\citet{lecun1998gradient}) on MNIST with and without \textit{chopout} and \textit{dropout} in each intermediate layer (Figure \ref{fig:lenet-300-100_mnist}). This is a very initial experiment but the result shows training with \textit{chopout} enhance the robustness of networks against pruning.
+    LeNet-300-100 \cite{lecun1998gradient} are trained on MNIST with/without \textit{chopout} and \textit{dropout} in each intermediate layer (Figure \ref{fig:lenet-300-100_mnist}). 
+    This is a very initial experiment but the result shows training with \textit{chopout} enhance the robustness of networks against pruning.
     
     \section{Discussion}
-    We introduced a novel and easy stochastic operator \textit{chopout} and showed it gather important information in the former parts of layers. Because the concept of \textit{chopout} is very simple and flexible, there could be broad direction of further research.
+    We introduced a novel stochastic operator \textit{chopout} and showed it gathers important information in former parts of lafyers. Because the concept of \textit{chopout} is very simple and flexible, there could be broad direction of further research.
 
-    (1) The distribution $P_m(\{0, 1, \cdots, d\})$ should be explored. If we put \textit{chopout}s in every layer of a neural network, then, in training, there could be a layer where drawn $m \sim P_m(\{0, 1, \cdots, d\})$ is very small and it could be bottleneck of the prediction accuracy.
+    (1) The distribution $P_m(\{0, 1, \cdots, d\})$ should be explored. If we put \textit{chopout}s in every layer of a neural network, then, in training, there could be a layer where drawn $m \sim P_m(\{0, 1, \cdots, d\})$ is very small and it could be a bottleneck of the prediction accuracy.
     
-    (2) \textit{Chopout} can be used for network pruning. The information-gathering property of \textit{chopout} enables to prune latter dimensions/channels of layers with keeping accuracy but the extent of pruning is still be explored. For this end, reinforcement learning techniques (e.g. bandit algorithms) can be used to detect the appropreate pruning ratio. Combination with weight pruning methods are also interesting as well.
+    (2) \textit{Chopout} can be used for network pruning. The information-gathering property of \textit{chopout} enables to prune latter dimensions/channels of layers with keeping accuracy but the extent of pruning is still should be explored. For this end, reinforcement learning techniques (e.g. bandit algorithms) can be used to detect the appropriate pruning ratio. Combination with weight pruning methods are also interesting as well.
 
     %\bibliography{references}
     
@@ -258,7 +259,8 @@
     
     %\small
         
-    \bibliographystyle{plainnat}
+    %\bibliographystyle{plainnat}
+    \bibliographystyle{abbrv}
     \bibliography{references}
     
     \end{document}
